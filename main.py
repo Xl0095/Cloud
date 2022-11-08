@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR
+from tqdm import tqdm
 
 from utils.dataset import get_train_val_dataset
 import utils.models
@@ -12,11 +13,13 @@ from utils.utils import Accumulator
 
 def parse_arg():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--lr', default=3e-4)
+    parser.add_argument('--lr', default=3e-2)
     parser.add_argument('--batch_size', default=128)
     parser.add_argument('--cuda', default=True)
     parser.add_argument('--epoch', default=100)
     parser.add_argument('--logging_path', default='logging/default_experiment')
+    parser.add_argument('--load_method', default='basic', help='You can choose different methods for loading dataset.'
+                                                               ' [basic, lmdb, preload] are supported.')
 
     args = parser.parse_args()
     return args
@@ -35,11 +38,11 @@ def lr_scheduler_func(epoch_num):
 
 def main():
     args = parse_arg()
-    train_dataset, val_dataset = get_train_val_dataset()
+    train_dataset, val_dataset = get_train_val_dataset(args)
     tb_logger = SummaryWriter(args.logging_path)
 
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
 
     model = utils.models.ResNet18(class_num=29, pretrained=False)
     if args.cuda:
@@ -49,15 +52,15 @@ def main():
     criterion = nn.CrossEntropyLoss()
 
     # Choose different lr schedulers.
-    scheduler = LambdaLR(optimizer=optim, lr_lambda=lr_scheduler_func)
-    # scheduler = CosineAnnealingLR(optimizer=optim, T_max=args.epoch, eta_min=1e-6)
+    # scheduler = LambdaLR(optimizer=optim, lr_lambda=lr_scheduler_func)
+    scheduler = CosineAnnealingLR(optimizer=optim, T_max=args.epoch, eta_min=1e-6)
 
-    for i in range(args.epoch):
+    for i in tqdm(range(args.epoch)):
         # Train
         model.train()
         accumulator1 = Accumulator()
+
         for _, (x, y) in enumerate(train_loader):
-            print('aaa')
             if args.cuda:
                 x, y = x.cuda(), y.cuda()
             o = model(x)
@@ -79,7 +82,7 @@ def main():
                     x, y = x.cuda(), y.cuda()
                 o = model(x)
                 loss = criterion(o, y)
-                acc = torch.sum(torch.argmax(o, dim=-1) == y).item() / len(o.shape[0])
+                acc = torch.sum(torch.argmax(o, dim=-1) == y).item() / o.shape[0]
                 accumulator2.append(loss.item(), acc)
         val_loss, val_acc = accumulator2.mean()
         print('EPOCH {}    VAL_LOSS: {:.3f}    VAL_ACC: {:.3f}'.format(i, val_loss, val_acc))
