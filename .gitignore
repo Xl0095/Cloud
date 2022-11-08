@@ -1,4 +1,4 @@
-data/
-logging/
+data/*
+logging/*
 */__pycache__/
 .idea/

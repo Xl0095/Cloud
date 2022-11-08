@@ -50,7 +50,7 @@ def main():
 
     # Choose different lr schedulers.
     scheduler = LambdaLR(optimizer=optim, lr_lambda=lr_scheduler_func)
-    # scheduler = CosineAnnealingLR(optimizer=optim, T_max=args.batch_size, eta_min=1e-6)
+    # scheduler = CosineAnnealingLR(optimizer=optim, T_max=args.epoch, eta_min=1e-6)
 
     for i in range(args.epoch):
         # Train
