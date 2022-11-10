@@ -10,6 +10,29 @@ import lmdb
 import pickle
 
 
+class TestDataset(Dataset):
+    def __init__(self, data_infos, cuda, imsize=224):
+        self.data_infos = data_infos
+        self.to_tensor = transforms.PILToTensor()
+        self.cuda = cuda
+        self.transform = transforms.Compose([
+            transforms.Resize((imsize, imsize)),
+        ]
+        )
+
+    def __getitem__(self, i):
+        img_path = os.path.join('data/images', self.data_infos[i])
+        img = self.to_tensor(Image.open(img_path).convert('RGB'))
+        if self.cuda:
+            img = img.cuda()
+        img = img.float() / 255
+        img = self.transform(img)
+        return img
+
+    def __len__(self):
+        return len(self.data_infos)
+
+
 class CloudDataset(Dataset):
     def __init__(self, data_infos, train, load_method, cuda, imsize=224):
         assert load_method in ['lmdb', 'preload', 'basic']
@@ -52,7 +75,7 @@ class CloudDataset(Dataset):
             img_path = os.path.join('data/Train', self.data_infos[i][0])
             img = self.to_tensor(Image.open(img_path).convert('RGB'))
             img = img.float() / 255
-            label = torch.tensor(int(self.data_infos[i][1].split(';')[0]) - 1)
+            label = torch.tensor(self.data_infos[i][1])
             preload_img.append(img)
             preload_label.append(label)
         self.preload_img = torch.stack(preload_img, dim=0)
@@ -60,9 +83,9 @@ class CloudDataset(Dataset):
 
     def __getitem__(self, i):
         if self.load_method == 'basic':
-            img_path = os.path.join('data/Train', self.data_infos[i][0])
+            img_path = os.path.join('data/images', self.data_infos[i][0])
             img = self.to_tensor(Image.open(img_path).convert('RGB'))
-            label = torch.tensor(int(self.data_infos[i][1].split(';')[0]) - 1)
+            label = torch.tensor(self.data_infos[i][1])
             if self.cuda:
                 img, label = img.cuda(), label.cuda()
             img = img.float() / 255
@@ -89,7 +112,8 @@ class CloudDataset(Dataset):
 
 
 def get_train_val_dataset(args):
-    df = pd.read_csv('data/Train_label.csv')
+    df = pd.read_csv('data/train.csv')
+    df['Code'] = df['Code'] - 1    # Class range is 1-28
     tot_infos = list(zip(df['FileName'], df['Code']))
     random.shuffle(tot_infos)
 
@@ -100,3 +124,11 @@ def get_train_val_dataset(args):
     val_dataset = CloudDataset(val_infos, train=False, load_method=args.load_method, cuda=args.cuda)
 
     return train_dataset, val_dataset
+
+
+def get_test_dataset(args):
+    df = pd.read_csv('data/test.csv')
+    tot_infos = list(df['FileName'])
+
+    test_dataset = TestDataset(tot_infos,  cuda=args.cuda)
+    return test_dataset

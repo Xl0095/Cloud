@@ -1,4 +1,5 @@
 class Accumulator:
+    # Util for calculating the mean value for different metrics
     def __init__(self):
         self._dic = {}
 

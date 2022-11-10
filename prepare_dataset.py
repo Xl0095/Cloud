@@ -32,6 +32,7 @@ def dump2lmdb(infos, path):
 
 def main_generation():
     df = pd.read_csv('data/Train_label.csv')
+    df['Code'] = df['Code'] - 1
     tot_infos = list(zip(df['FileName'], df['Code']))
     random.shuffle(tot_infos)
 

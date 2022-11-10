@@ -1,14 +1,16 @@
 import argparse
-from torch.utils.data import DataLoader
-import torch.nn as nn
+import pandas as pd
+from tqdm import tqdm
+
 import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR
-from tqdm import tqdm
-from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score
+from sklearn.metrics import f1_score, recall_score, accuracy_score
 
-from utils.dataset import get_train_val_dataset
 import utils.models
+from utils.dataset import get_train_val_dataset, get_test_dataset
 from utils.utils import Accumulator
 
 
@@ -27,6 +29,7 @@ def parse_arg():
 
 
 def lr_scheduler_func(epoch_num):
+    # lr scheduler if you use LambdaLR
     if epoch_num < 40:
         return 3e-4
     elif epoch_num < 60:
@@ -38,12 +41,29 @@ def lr_scheduler_func(epoch_num):
 
 
 def get_metrics(y, y_pred, cuda):
+    # Calculate corresponding metrics.
     if cuda:
         y, y_pred = y.cpu(), y_pred.cpu()
     acc = accuracy_score(y, y_pred)
     rec = recall_score(y, y_pred, average='macro')
     f1 = f1_score(y, y_pred, average='macro')
     return {'Accuracy': acc, 'Recall': rec, 'F1': f1}
+
+
+def dump2file(model, args):
+    # Use model to generate submission file.
+    test_dataset = get_test_dataset(args)
+    model.eval()
+    result = {'FileName': [], 'Code': []}
+    with torch.no_grad():
+        for i in range(len(test_dataset)):
+            img_id = test_dataset.data_infos[i]
+            img = test_dataset[i]
+            y_pred = torch.argmax(model(img.unsqueeze(0)), dim=-1).item()
+            result['FileName'].append(img_id)
+            result['Code'].append(y_pred + 1)
+    df = pd.DataFrame(result)
+    df.to_csv('my_submission.csv', index=False)
 
 
 def main():
@@ -54,7 +74,7 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
 
-    model = utils.models.ResNet18(class_num=29, pretrained=False)
+    model = utils.models.ResNet18(class_num=28, pretrained=False)
     if args.cuda:
         model.cuda()
 
@@ -109,6 +129,8 @@ def main():
         for k in val_metrics:
             tb_logger.add_scalar('validation/{}'.format(k), val_metrics[k], i)
         tb_logger.add_scalar('learning_rate', optim.state_dict()['param_groups'][0]['lr'], i)
+
+    dump2file(model, args)
 
 
 if __name__ == '__main__':

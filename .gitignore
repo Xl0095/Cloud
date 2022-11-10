@@ -1,5 +1,9 @@
 data/*
 logging/*
 __pycache__
+data_tot/*
 */__pycache__/
 .idea/
+submission.csv
+submission.zip
+
